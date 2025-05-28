@@ -1,7 +1,7 @@
 const scriptName = "던붕이봇";
 let debugSender = "DEBUG SENDER";
 
-const baseURL = "https://github.com";
+const baseURL = "http://3.36.213.118:8000/Exp";
 
 // 메시지 파서가 분리한 문자열 목록을 빌드하여 의미있는 커맨드를 만든다.
 function Command(words)
@@ -66,10 +66,11 @@ CommandFactory.prototype.Make = function()
 
 
 // 정보를 기반으로 답장을 만들어 송신
-function ReplyMaker(replier)
+function ReplyMaker(room, replier)
 {
   this.replier = replier;
-
+  this.room = room;
+  
   this.MakeMsg = function(info)
   {
     return info;
@@ -80,7 +81,7 @@ ReplyMaker.prototype = {};
 ReplyMaker.prototype.Work = function(info)
 {
   var msg = this.MakeMsg(info);
-  this.replier.reply(msg);
+  this.replier.reply(this.room, msg);
 };
 
 
@@ -90,11 +91,12 @@ function MessageMediator(sender, replier)
   this.sender = sender;
   this.replier = replier;
   this.baseURL = baseURL;
-
   this.Request = function(command)
   {
     var url = this.MakeURL(command);
-    return Utils.parse(url);
+    var rawtext = Utils.getWebText(url);
+    
+    return rawtext.replace(/(<([^>]+)>)/g,'').trim().replace(/&gt;/g, '>').replace(/&amp;gn/g, '\n').replace(/&amp;gs/g, ' ');
   };
 
   this.MakeURL = function(command)
@@ -103,10 +105,14 @@ function MessageMediator(sender, replier)
     if(command.params == null)
       return url;
 
+    url += "p0=";
+    url += commandName;
+    url += "&";
+    
     for(var i = 0; i < command.params.length; i++)
     {
       url += "p";
-      url += i;
+      url += i + 1;
       url += "=";
       url += command.params[i];
       url += "&";
@@ -115,15 +121,15 @@ function MessageMediator(sender, replier)
     return url;
   };
 
-  this.Reply = function(msg)
+  this.Reply = function(room, msg)
   {
-    replier = new ReplyMaker(this.replier);
+    replier = new ReplyMaker(room, this.replier);
     replier.Work(msg);
   };
 }
 
 MessageMediator.prototype = {};
-MessageMediator.prototype.Work = function(msg)
+MessageMediator.prototype.Work = function(room, msg)
 {
   var commandFactory = new CommandFactory(msg);
   var command = commandFactory.Make();
@@ -134,7 +140,7 @@ MessageMediator.prototype.Work = function(msg)
   }
 
   var response = this.Request(command); // 현재 동기 방식
-  this.Reply(response);
+  this.Reply(room, response);
 };
 
 
@@ -152,7 +158,7 @@ function response(room, msg, sender, isGroupChat, replier, imageDB, packageName)
   var thread = new java.lang.Thread(function()
   {
     var mediator = new MessageMediator(sender, replier);
-    mediator.Work(msg);
+    mediator.Work(room, msg);
   });
 
   thread.start();
